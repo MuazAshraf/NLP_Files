@@ -1,0 +1,30 @@
+<html>
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <form method="POST" id="myForm">
+        <label for="prompt">Prompt: </label>
+        <input type="text" id="prompt" name="prompt" placeholder="Enter Query...">
+    <br/>
+        <input type="submit" value="Generate Image" class="button"id="submit-button">
+    </form>
+    <div id="progress-bar" style="display: none; width: 35%; background: #F5F5F5; border-radius: 10px; height: 20px; position: fixed; bottom: 70;">
+        <div id="progress" style="width: 1%; height: 100%; background: #00A9DF; border-radius: 10px;"></div>
+    </div>
+    <script>
+        document.getElementById('myForm').onsubmit = function() {
+            document.getElementById('submit-button').value = "Generating...";
+            document.getElementById('progress-bar').style.display = "block";
+            var width = 0;
+            var interval = setInterval(function() {
+                if (width < 100) {
+                    width++;
+                    document.getElementById('progress').style.width = width + '%';
+                }
+            }, 100);
+        }
+        
+    </script>
+</body>
+</html>
