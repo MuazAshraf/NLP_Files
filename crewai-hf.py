@@ -8,7 +8,7 @@ app = Flask(__name__)
 #<------------------Crew AI------------------------>
 llm_yi = HuggingFaceHub(
     repo_id="01-ai/Yi-1.5-34B-Chat",
-    huggingfacehub_api_token="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",
+    huggingfacehub_api_token="hf_key",
     task="text-generation",
     max_new_tokens=2048
 )
