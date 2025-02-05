@@ -2,7 +2,7 @@ import requests
 import time
 
 API_URL = "https://api-inference.huggingface.co/models/microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext"
-headers = {"Authorization": "Bearer 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"}
+headers = {"Authorization": "Bearer hf_key"}
 
 def query(payload):
 	while True:
