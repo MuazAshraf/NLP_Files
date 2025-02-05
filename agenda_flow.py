@@ -15,7 +15,7 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
 client = OpenAI(api_key=OPENAI_API_KEY)
 API_ENDPOINT = "https://api.fireflies.ai/graphql"
-API_KEY = "1ae0d60c-300d-48a2-9542-bd9a61627e5c"
+API_KEY = "key"
 headers = {
     "Authorization": f"Bearer {API_KEY}",
     "Content-Type": "application/json"
