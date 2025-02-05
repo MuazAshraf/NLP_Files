@@ -3,9 +3,9 @@
 import agentql
 from playwright.sync_api import sync_playwright
 
-URL = "https://mybenefitsapp.com/wp-admin/"
-USER = "eric"
-PASSWORD = "cXhxb(Ji4cwsOkdp"
+URL = "https://websiteurl"
+USER = "user"
+PASSWORD = "password"
 
 # Define the queries to interact with the page
 LOG_IN_QUERY = """
