@@ -445,10 +445,54 @@ def update_existing_repo():
     """Update existing git repository."""
     print("🔄 Updating existing git repository...")
     
+    # First, pull latest changes from remote
+    if has_remote_origin():
+        print("🔽 Pulling latest changes from remote...")
+        current_branch = get_current_branch()
+        success, stdout, error = run_command(f"git pull origin {current_branch}", check=False)
+        
+        if success:
+            if "Already up to date" in stdout or "Already up-to-date" in stdout:
+                print("✅ Repository is already up to date")
+            elif "Fast-forward" in stdout:
+                print("✅ Fast-forwarded to latest changes")
+                # Show what was pulled
+                lines = stdout.split('\n')
+                for line in lines:
+                    if 'file' in line and ('changed' in line or 'insertion' in line or 'deletion' in line):
+                        print(f"   📥 {line.strip()}")
+            elif stdout.strip():
+                print("✅ Successfully pulled changes")
+                print(f"   📥 {stdout.strip()}")
+            else:
+                print("✅ Pull completed")
+        else:
+            if "merge conflict" in error.lower() or "conflict" in error.lower():
+                print(f"⚠️  Merge conflicts detected:")
+                print(f"   🔍 {error}")
+                print("   ⚡ Please resolve conflicts manually and run the script again")
+                return False
+            elif "diverged" in error.lower():
+                print(f"⚠️  Branches have diverged:")
+                print(f"   🔍 {error}")
+                print("   💡 You may need to merge or rebase manually")
+                
+                response = input("Do you want to continue anyway? (y/N): ").strip().lower()
+                if response != 'y':
+                    print("   ⏹️  Stopping to let you handle the divergence")
+                    return False
+            else:
+                print(f"⚠️  Pull failed: {error}")
+                response = input("Do you want to continue without pulling? (y/N): ").strip().lower()
+                if response != 'y':
+                    return False
+    else:
+        print("ℹ️  No remote origin configured, skipping pull")
+    
     # Analyze changes before adding
     changes, total_files, _ = analyze_changes()
     if total_files == 0:
-        print("ℹ️  No changes to commit")
+        print("ℹ️  No local changes to commit")
         return True
     
     display_changes(changes, total_files)
@@ -483,9 +527,23 @@ def update_existing_repo():
     print(f"🚀 Pushing {total_files} changed files to GitHub...")
     success, _, error = run_command(f"git push origin {current_branch}")
     if not success:
-        print(f"❌ Failed to push: {error}")
-        return False
-    print(f"✅ Successfully pushed to GitHub (origin/{current_branch})")
+        # Handle common push errors
+        if "rejected" in error.lower() and "non-fast-forward" in error.lower():
+            print("❌ Push rejected - remote has newer commits")
+            print("   💡 This shouldn't happen since we pulled, but trying force push with lease...")
+            
+            success, _, error2 = run_command(f"git push --force-with-lease origin {current_branch}", check=False)
+            if success:
+                print("✅ Force push with lease successful")
+            else:
+                print(f"❌ Force push also failed: {error2}")
+                print("   🔧 Please check the repository status manually")
+                return False
+        else:
+            print(f"❌ Failed to push: {error}")
+            return False
+    else:
+        print(f"✅ Successfully pushed to GitHub (origin/{current_branch})")
     
     # Show what was pushed
     print(f"\n🎯 Pushed to GitHub:")
