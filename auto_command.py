@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from collections import defaultdict
 
 
 def run_command(command, check=True):
@@ -71,15 +72,6 @@ wheels/
 *.ipynb
 .ipynb_checkpoints/
 
-# Project-specific directories
-reports/
-realtime_speech/microphone.ipynb
-niceGUI/
-tts/modul/
-
-# Generated content
-data/transcripts/
-blogs/
 
 # IDE and Editor files
 .vscode/
@@ -156,6 +148,7 @@ data/transcripts/
 *.mp4
 .aider*
 .pickle*
+node_modules/
 """
 
 
@@ -190,6 +183,136 @@ def create_gitignore():
     except Exception as e:
         print(f"❌ Failed to create .gitignore: {e}")
         return False
+
+
+def analyze_changes():
+    """Analyze git changes and return detailed information."""
+    success, stdout, _ = run_command("git status --porcelain", check=False)
+    if not success:
+        return None, None, None
+    
+    changes = {
+        'added': [],
+        'modified': [],
+        'deleted': [],
+        'renamed': [],
+        'untracked': []
+    }
+    
+    total_files = 0
+    
+    for line in stdout.split('\n'):
+        if not line.strip():
+            continue
+            
+        status = line[:2]
+        filename = line[3:].strip()
+        total_files += 1
+        
+        # Parse git status codes
+        if status == 'A ' or status == 'AM':
+            changes['added'].append(filename)
+        elif status == 'M ' or status == ' M' or status == 'MM':
+            changes['modified'].append(filename)
+        elif status == 'D ' or status == ' D':
+            changes['deleted'].append(filename)
+        elif status.startswith('R'):
+            changes['renamed'].append(filename)
+        elif status == '??':
+            changes['untracked'].append(filename)
+        else:
+            # Handle other status codes
+            if 'M' in status:
+                changes['modified'].append(filename)
+            elif 'A' in status:
+                changes['added'].append(filename)
+            elif 'D' in status:
+                changes['deleted'].append(filename)
+    
+    return changes, total_files, stdout
+
+
+def display_changes(changes, total_files):
+    """Display detailed change information."""
+    if total_files == 0:
+        print("ℹ️  No changes to commit")
+        return
+    
+    print(f"\n📊 Changes Summary ({total_files} files):")
+    print("=" * 50)
+    
+    if changes['untracked']:
+        print(f"🆕 New files ({len(changes['untracked'])}):")
+        for file in changes['untracked'][:10]:  # Show first 10
+            print(f"   + {file}")
+        if len(changes['untracked']) > 10:
+            print(f"   ... and {len(changes['untracked']) - 10} more")
+    
+    if changes['added']:
+        print(f"➕ Added files ({len(changes['added'])}):")
+        for file in changes['added'][:10]:
+            print(f"   + {file}")
+        if len(changes['added']) > 10:
+            print(f"   ... and {len(changes['added']) - 10} more")
+    
+    if changes['modified']:
+        print(f"✏️  Modified files ({len(changes['modified'])}):")
+        for file in changes['modified'][:10]:
+            print(f"   ~ {file}")
+        if len(changes['modified']) > 10:
+            print(f"   ... and {len(changes['modified']) - 10} more")
+    
+    if changes['deleted']:
+        print(f"🗑️  Deleted files ({len(changes['deleted'])}):")
+        for file in changes['deleted'][:10]:
+            print(f"   - {file}")
+        if len(changes['deleted']) > 10:
+            print(f"   ... and {len(changes['deleted']) - 10} more")
+    
+    if changes['renamed']:
+        print(f"📝 Renamed files ({len(changes['renamed'])}):")
+        for file in changes['renamed'][:10]:
+            print(f"   → {file}")
+        if len(changes['renamed']) > 10:
+            print(f"   ... and {len(changes['renamed']) - 10} more")
+
+
+def generate_commit_message(changes, total_files, is_initial=False):
+    """Generate descriptive commit message based on changes."""
+    if is_initial:
+        return "initial commit"
+    
+    if total_files == 0:
+        return "no changes"
+    
+    parts = []
+    
+    # Count different types of changes
+    counts = {k: len(v) for k, v in changes.items() if v}
+    
+    if counts.get('untracked', 0) > 0 or counts.get('added', 0) > 0:
+        new_files = counts.get('untracked', 0) + counts.get('added', 0)
+        parts.append(f"add {new_files} file{'s' if new_files != 1 else ''}")
+    
+    if counts.get('modified', 0) > 0:
+        parts.append(f"update {counts['modified']} file{'s' if counts['modified'] != 1 else ''}")
+    
+    if counts.get('deleted', 0) > 0:
+        parts.append(f"remove {counts['deleted']} file{'s' if counts['deleted'] != 1 else ''}")
+    
+    if counts.get('renamed', 0) > 0:
+        parts.append(f"rename {counts['renamed']} file{'s' if counts['renamed'] != 1 else ''}")
+    
+    if not parts:
+        return "misc changes"
+    
+    # Create readable commit message
+    if len(parts) == 1:
+        return parts[0]
+    elif len(parts) == 2:
+        return f"{parts[0]} and {parts[1]}"
+    else:
+        return f"{', '.join(parts[:-1])}, and {parts[-1]}"
 
 
 def is_git_repo():
@@ -273,16 +396,22 @@ def initialize_new_repo():
         return False
     print("✅ Git repository initialized")
     
+    # Analyze changes before adding
+    changes, total_files, _ = analyze_changes()
+    if changes and total_files > 0:
+        display_changes(changes, total_files)
+    
     # Git add with error handling
     if not safe_git_add():
         return False
     
     # Initial commit
-    success, _, error = run_command('git commit -m "initial commit"')
+    commit_msg = generate_commit_message(changes, total_files, is_initial=True)
+    success, _, error = run_command(f'git commit -m "{commit_msg}"')
     if not success:
         print(f"❌ Failed to commit: {error}")
         return False
-    print("✅ Initial commit created")
+    print(f"✅ Initial commit created: '{commit_msg}'")
     
     # Ask for remote URL
     while True:
@@ -302,12 +431,13 @@ def initialize_new_repo():
         current_branch = get_current_branch()
         
         # Push to remote
+        print(f"🚀 Pushing {total_files} files to GitHub...")
         success, _, error = run_command(f"git push -u origin {current_branch}")
         if not success:
             print(f"❌ Failed to push: {error}")
             print("You may need to create the repository on the remote first")
             return False
-        print(f"✅ Pushed to origin/{current_branch}")
+        print(f"✅ Successfully pushed to GitHub (origin/{current_branch})")
         return True
 
 
@@ -315,22 +445,108 @@ def update_existing_repo():
     """Update existing git repository."""
     print("🔄 Updating existing git repository...")
     
+    # First, pull latest changes from remote
+    if has_remote_origin():
+        current_branch = get_current_branch()
+        print(f"🔽 Pulling latest changes from remote...")
+        print(f"   Current branch: {current_branch}")
+        
+        # Check if remote branch exists
+        success, _, _ = run_command(f"git ls-remote --exit-code --heads origin {current_branch}", check=False)
+        if not success:
+            print(f"⚠️  Remote branch '{current_branch}' doesn't exist on origin")
+            print("   This is normal for new branches - it will be created when you push")
+            
+            # Try to pull from main/master instead if available
+            main_branches = ['main', 'master']
+            pulled_from_main = False
+            
+            for main_branch in main_branches:
+                success, _, _ = run_command(f"git ls-remote --exit-code --heads origin {main_branch}", check=False)
+                if success:
+                    print(f"   Attempting to pull latest changes from origin/{main_branch} instead...")
+                    success, stdout, error = run_command(f"git pull origin {main_branch}", check=False)
+                    if success:
+                        print(f"✅ Successfully pulled from origin/{main_branch}")
+                        pulled_from_main = True
+                        break
+                    else:
+                        print(f"⚠️  Failed to pull from {main_branch}: {error}")
+            
+            if not pulled_from_main:
+                print("ℹ️  No main/master branch to pull from - continuing with local changes")
+        else:
+            # Remote branch exists, try to pull from it
+            success, stdout, error = run_command(f"git pull origin {current_branch}", check=False)
+            
+            if success:
+                if "Already up to date" in stdout or "Already up-to-date" in stdout:
+                    print("✅ Repository is already up to date")
+                elif "Fast-forward" in stdout:
+                    print("✅ Fast-forwarded to latest changes")
+                    # Show what was pulled
+                    lines = stdout.split('\n')
+                    for line in lines:
+                        if 'file' in line and ('changed' in line or 'insertion' in line or 'deletion' in line):
+                            print(f"   📥 {line.strip()}")
+                elif stdout.strip():
+                    print("✅ Successfully pulled changes")
+                    print(f"   📥 {stdout.strip()}")
+                else:
+                    print("✅ Pull completed")
+            else:
+                if "merge conflict" in error.lower() or "conflict" in error.lower():
+                    print(f"⚠️  Merge conflicts detected:")
+                    print(f"   🔍 {error}")
+                    print("   ⚡ Please resolve conflicts manually and run the script again")
+                    return False
+                elif "diverged" in error.lower():
+                    print(f"⚠️  Branches have diverged:")
+                    print(f"   🔍 {error}")
+                    print("   💡 You may need to merge or rebase manually")
+                    
+                    response = input("Do you want to continue anyway? (y/N): ").strip().lower()
+                    if response != 'y':
+                        print("   ⏹️  Stopping to let you handle the divergence")
+                        return False
+                elif "couldn't find remote ref" in error.lower():
+                    print(f"⚠️  Remote branch '{current_branch}' not found on origin")
+                    print("   This branch will be created when you push")
+                else:
+                    print(f"⚠️  Pull failed: {error}")
+                    response = input("Do you want to continue without pulling? (y/N): ").strip().lower()
+                    if response != 'y':
+                        return False
+    else:
+        print("ℹ️  No remote origin configured, skipping pull")
+    
+    # Analyze changes before adding
+    changes, total_files, _ = analyze_changes()
+    if total_files == 0:
+        print("ℹ️  No local changes to commit")
+        return True
+    
+    display_changes(changes, total_files)
+    
     # Git add with error handling
     if not safe_git_add():
         return False
     
-    # Check if there are changes to commit
+    # Check if there are changes to commit after adding
     success, stdout, _ = run_command("git status --porcelain")
     if success and not stdout:
-        print("ℹ️  No changes to commit")
+        print("ℹ️  No changes to commit after staging")
         return True
     
+    # Generate descriptive commit message
+    commit_msg = generate_commit_message(changes, total_files)
+    
     # Commit changes
-    success, _, error = run_command('git commit -m "changes"')
+    success, _, error = run_command(f'git commit -m "{commit_msg}"')
     if not success:
         print(f"❌ Failed to commit: {error}")
         return False
-    print("✅ Changes committed")
+    print(f"✅ Changes committed: '{commit_msg}'")
     
     # Check if remote exists
     if not has_remote_origin():
@@ -339,11 +555,41 @@ def update_existing_repo():
     
     # Push changes
     current_branch = get_current_branch()
-    success, _, error = run_command(f"git push origin {current_branch}")
+    print(f"🚀 Pushing {total_files} changed files to GitHub...")
+    
+    # Check if this is the first push to this branch
+    success, _, _ = run_command(f"git ls-remote --exit-code --heads origin {current_branch}", check=False)
     if not success:
-        print(f"❌ Failed to push: {error}")
-        return False
-    print(f"✅ Pushed to origin/{current_branch}")
+        print(f"   Creating new remote branch: {current_branch}")
+        success, _, error = run_command(f"git push -u origin {current_branch}")
+    else:
+        success, _, error = run_command(f"git push origin {current_branch}")
+    
+    if not success:
+        # Handle common push errors
+        if "rejected" in error.lower() and "non-fast-forward" in error.lower():
+            print("❌ Push rejected - remote has newer commits")
+            print("   💡 This shouldn't happen since we pulled, but trying force push with lease...")
+            
+            success, _, error2 = run_command(f"git push --force-with-lease origin {current_branch}", check=False)
+            if success:
+                print("✅ Force push with lease successful")
+            else:
+                print(f"❌ Force push also failed: {error2}")
+                print("   🔧 Please check the repository status manually")
+                return False
+        else:
+            print(f"❌ Failed to push: {error}")
+            return False
+    else:
+        print(f"✅ Successfully pushed to GitHub (origin/{current_branch})")
+    
+    # Show what was pushed
+    print(f"\n🎯 Pushed to GitHub:")
+    print(f"   📁 Repository: origin/{current_branch}")
+    print(f"   💾 Commit: '{commit_msg}'")
+    print(f"   📊 Files: {total_files} changed")
+    
     return True
 
 
